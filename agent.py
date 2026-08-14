@@ -16,22 +16,56 @@ class SimpleReflexAgent:
 
 
 class ModelBasedAgent:
-    """A memory-based agent that avoids repeating failed moves for the same percept."""
+    """A memory-based agent that updates its internal state before acting."""
 
     def __init__(self):
         self.last_action = None
+        self.last_position = None
+        self.visited_cells = set()
+        self.action_history = []
+
+    def _direction_to_delta(self, action: str):
+        directions = {
+            'Up': (0, 1),
+            'Down': (0, -1),
+            'Left': (-1, 0),
+            'Right': (1, 0),
+        }
+        return directions.get(action, (0, 0))
 
     def sense_and_act(self, percept: dict) -> str:
+        # Transition and sensor model update: remember the current state and the previous move.
+        pos = percept.get('agent_pos')
+        if pos is not None:
+            current_pos = tuple(pos)
+            if self.last_position is not None:
+                self.visited_cells.add(self.last_position)
+            self.last_position = current_pos
+
+        if self.last_action is not None:
+            self.action_history.append(self.last_action)
+
         wall_detected = percept.get('wall_ahead') or percept.get('hit_wall')
         food_detected = percept.get('food_here') or percept.get('smells_food')
 
         if food_detected:
             action = 'Up'
         elif wall_detected:
+            # Memory-guided rule: if a wall is ahead, avoid repeating the last move and
+            # prefer directions that are not already in the recent memory.
             preferred_order = ['Left', 'Right', 'Down', 'Up']
             if self.last_action in preferred_order:
                 preferred_order.remove(self.last_action)
-            action = preferred_order[0]
+
+            # Example memory-aware logic: if a cell has been visited, prefer another turn.
+            for candidate in preferred_order:
+                if self.last_action == candidate:
+                    continue
+                if candidate not in self.action_history[-4:]:
+                    action = candidate
+                    break
+            else:
+                action = preferred_order[0]
         else:
             action = 'Right'
 
